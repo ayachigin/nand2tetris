@@ -39,5 +39,81 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
+    // parse command
+    And(a=instruction[15], b=true, out=isC); // is c command
+    Not(in=isC, out=isA);                   // is a command
+
+    // parse c command
+    // 0 1 2 3  4  5  6  7   8  9  10 11  12 13 14 15
+    // 1 1 1 a  c1 c2 c3 c4  c5 c6 d1 d2  d3 j1 j2 j3
+    And16(a[0]=isC, a[1]=isC, a[2]=isC, a[3]=isC, a[4]=isC, a[5]=isC, a[6]=isC, a[7]=isC,
+          a[8]=isC, a[9]=isC, a[10]=isC, a[11]=isC, a[12]=isC, a[13]=isC, a[14]=isC, a[15]=isC,
+          b=instruction, out[0]=j3, out[1]=j2, out[2]=j1,
+          out[3]=d3, out[4]=d2, out[5]=d1,
+          out[6]=c6, out[7]=c5, out[8]=c4, out[9]=c3, out[10]=c2, out[11]=c1,
+          out[12]=a);
+
+    And(a=isC, b=d3, out=writeM);                
+
+
+    // Mux16 A
+    Mux16(a=aluOut, b=instruction, sel=isA, out=outMux16A);
+
+    // Register A
+    And(a=isC, b=d1, out=loadCA);
+    Or(a=loadCA, b=isA, out=loadA);
+    ARegister(in=outMux16A, load=loadA, out=outARegister, out[0..14]=addressM);
+
+    // Mux16 B
+    Mux16(a=outARegister, b=inM, sel=a, out=outMux16B);
+
+    // Register
+    And(a=isC, b=d2, out=loadD);
+    DRegister(in=aluOut, load=loadD, out=outDRegister);
+
+    ALU(x=outDRegister, y=outMux16B,
+        zx = c1, nx = c2, zy = c3, ny = c4, f = c5, no = c6,
+        out = aluOut, out = outM, zr = zr1, ng = ng1);
+
+    // Program Counter
+    // jump command
+    DMux8Way(in=isC, sel[0]=j3, sel[1]=j2, sel[2]=j1,
+             a=null, b=jgt, c=jeq, d=jge,
+             e=jlt, f=jne, g=jle, h=jmp);
+
+    // null No jump
+
+    // JGT If out > 0 jump
+    Not(in=zr1, out=nzr);
+    Not(in=ng1, out=nat);
+    And(a=nzr, b=nat, out=pos);
+    And(a=jgt, b=pos, out=jgt1);
+
+    // JEQ If out = 0 jump
+    And(a=zr1, b=jeq, out=jeq1);
+
+    // JGE If out >= 0 jump
+    And(a=jge, b=nat, out=jge1);
+    
+    // JLT If out < 0 jump
+    And(a=jlt, b=ng1, out=jlt1);
+
+    // JNE If out /= 0 jump
+    And(a=jne, b=nzr, out=jne1);
+
+    // JLE If out <= 0
+    Or(a=ng1, b=zr1, out=ngOrZr);
+    And(a=jle, b=ngOrZr, out=jle1);
+
+    // JMP jump
+    And(a=jmp, b=true, out=jmp1);
+
+    // jump flag
+    Or8Way(in[0]=false, in[1]=jgt1, in[2]=jeq1, in[3]=jge1,
+           in[4]=jlt1,  in[5]=jne1, in[6]=jle1, in[7]=jmp1, out=loadPC);
+
+    // increment
+    Not(in=loadPC, out=notJump);
+    Or8Way(in[0]=isA, in[1]=null, in[2]=notJump, in[3..7]=false, out=incPC);
+    PC(in=outARegister, load=loadPC, inc=incPC, reset=reset, out[0..14]=pc);    
 }
