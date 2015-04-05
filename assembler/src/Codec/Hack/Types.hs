@@ -55,6 +55,18 @@ data Comp = Comp0
             deriving (Show, Read, Eq)
 
 type Address = [Binary]
+
+data HackAssembly = AssemblyA HackCommand
+                  | AssemblyC HackCommand
+                  | AssemblyL String
+                  | AssemblyV String
+                    deriving (Show)
+
+dec2bin :: Int -> Address
+dec2bin 0 = []
+dec2bin n
+  | even n = dec2bin (n`div`2) ++ [BinaryZ]
+  | otherwise = dec2bin (n`div`2) ++ [BinaryO]
                      
 data HackCommand = HackA Address | HackC Comp Dest Jump deriving (Show)
 

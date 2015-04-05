@@ -61,10 +61,10 @@ parseComp = do
         try (string "D-M") <|>
         try (string "M-D") <|>
         try (string "D&M") <|>
-        try (string "D")   <|>
+        try (string "D|M") <|>
         try (string "M")   <|>
         try (string "A")   <|>
-        try (string "D|M"))
+        try (string "D"))
   return $ case s of
     "0" -> Comp0
     "1" -> Comp1
@@ -95,48 +95,66 @@ parseComp = do
     "D&M" -> CompDAndM
     "D|M" -> CompDOrM
 
-parseCCommand :: Parser HackCommand
-parseCCommand = do
+symbol :: Parser String
+symbol = do
+  s <- letter <|> oneOf "$_.:"
+  ss <- many (letter <|> oneOf "$_.:" <|> digit)
+  return $ s:ss
+  
+
+parseHackCommand :: Parser HackAssembly
+parseHackCommand = do
   mdest <- optionMaybe . try $ parseDest
   comp <- parseComp
   mjump <- optionMaybe parseJump
   let dest = maybe DestNull id mdest
       jump = maybe JumpNull id mjump
-  return $ HackC comp dest jump
+  return $ AssemblyC $ HackC comp dest jump
 
-dec2bin :: Int -> Address
-dec2bin 0 = []
-dec2bin n
-  | even n = dec2bin (n`div`2) ++ [BinaryZ]
-  | otherwise = dec2bin (n`div`2) ++ [BinaryO]
-
-parseACommand :: Parser HackCommand
-parseACommand = do
+parseHackAddress :: Parser HackAssembly
+parseHackAddress = do
   char '@'
   s <- many1 digit
-  return . HackA . dec2bin $ (read s)
+  return . AssemblyA . HackA. dec2bin $ (read s)
 
-parseHackCommand :: Parser HackCommand
-parseHackCommand = parseACommand <|> parseCCommand
+parseHackVariable :: Parser HackAssembly
+parseHackVariable = do
+  char '@'
+  s <- symbol
+  return . AssemblyV $ s
+
+parseHackLabel :: Parser HackAssembly
+parseHackLabel = do
+  char '('
+  s <- symbol
+  char ')'
+  return . AssemblyL $ s
+
+parseHackCommands :: Parser HackAssembly
+parseHackCommands = try parseHackAddress
+                    <|> parseHackVariable
+                    <|> parseHackCommand
+                    <|> parseHackLabel
 
 parseComment :: Parser ()
 parseComment = do
-  many space
-  string "//"
-  many $ noneOf "\n"
-  char '\n'
+  optionMaybe (string "//" >> (many $ noneOf "\n"))
+  many1 space
   return ()
 
 parseEmptyLine :: Parser ()
 parseEmptyLine = many space >> return ()
 
-parseLine :: Parser HackCommand
+parseLine :: Parser HackAssembly
 parseLine = do
   spaces
-  c <- parseHackCommand
-  spaces
+  c <- parseHackCommands
+  (many parseComment >> return ()) <|> spaces
   return c
 
-parseHackAsm :: Parser [HackCommand]
-parseHackAsm = sepEndBy parseLine spaces
+parseHackAsm :: Parser [HackAssembly]
+parseHackAsm = do
+  many parseComment
+  many parseLine
+
 
