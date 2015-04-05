@@ -1,5 +1,7 @@
 module Codec.Hack.Types where
 
+import Codec.Hack.Util (pad)
+
 data Binary = BinaryZ | BinaryO deriving (Show, Read, Eq)
 
 data Dest = DestNull
@@ -54,9 +56,9 @@ data Comp = Comp0
 
 type Address = [Binary]
                      
-data HackCommand = HackA Address | HackC Comp Dest Jump
+data HackCommand = HackA Address | HackC Comp Dest Jump deriving (Show)
 
-data HackAssembly = HackAssembly [HackCommand]
+data HackCommands = HackCommands [HackCommand]
 
 class AssemblyLanguage a where
     mechanize :: a -> String
@@ -114,9 +116,14 @@ instance AssemblyLanguage Comp where
     mechanize CompMMinusD = "1000111"
     mechanize CompDAndM   = "1000000"
     mechanize CompDOrM    = "1010101"
-                         
-instance AssemblyLanguage HackAssembly where
-    mechanize (HackAssembly xs) = unlines (mechanize' xs)
+
+instance AssemblyLanguage HackCommand where
+  mechanize (HackA address) = pad 16 '0' . concatMap mechanize $ address
+  mechanize (HackC comp  dest jump) =
+    "111" ++ mechanize comp ++ mechanize dest ++ mechanize jump
+
+instance AssemblyLanguage HackCommands where
+    mechanize (HackCommands xs) = unlines (mechanize' xs)
         where
           mechanize' [] = []
           mechanize' (HackA address: as) = 
