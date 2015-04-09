@@ -66,6 +66,29 @@ sub = unlines ["D=M-D"]
 neg :: String
 neg = unlines ["D=-M"]
 
+eq :: CodeWriter String
+eq = do
+  substruction <- arithmetic Sub
+  not' <- arithmetic Not
+  filename <- getFilename
+  v <- getVariableCout
+  let label1 = filename ++ "$not_eq" ++ show v
+      label2 = filename ++ "$push_result" ++ show v
+  return $ unlines ["// eq"
+                   ,init substruction
+                   ,"@" ++ label1
+                   ,"D;JNE"
+                   -- D register is 0 and not 0 is 0xFFFF <-- its true !
+                   ,init not' -- remove \n
+                   ,"@" ++ label2
+                   ,"0;JMP"
+                   ,"(" ++ label1 ++ ")"
+                   ,init popD
+                   ,"D=0"
+                   ,init push -- remove \n
+                   ,"(" ++ label2 ++ ")"
+                   ]
+                   
 type CodeWriter a = RWS String () Int a
     
 compile :: HackVML -> String -> String
@@ -99,7 +122,7 @@ arithmetic :: ArithmeticCommand -> CodeWriter String
 arithmetic Add = return $ "// Add\n" ++ popD ++ popM ++ add ++ push
 arithmetic Sub = return $ "// Sub\n" ++ popD ++ popM ++ sub ++ push
 arithmetic Neg = return $ "// Neg\n" ++ popD ++ neg ++ push
-arithmetic Eq  = return $ undefined
+arithmetic Eq  = eq
 arithmetic Gt  = return $ undefined
 arithmetic Lt  = return $ undefined
 arithmetic And = return $ popD ++ popM ++ "D=D&M\n" ++ push
