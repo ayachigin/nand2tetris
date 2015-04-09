@@ -28,5 +28,5 @@ data StackOperation = Push MemorySegment Int
 data HackVMCommand = ArithmeticCommand ArithmeticCommand
                    | StackOperation StackOperation
                      deriving (Show, Read, Eq)
-
-data HackVM = HackVM [HackVMCommand]
+data HackVML = HackVML [HackVMCommand]
+             deriving (Show, Read, Eq)

@@ -112,5 +112,5 @@ parserHackVM = do
           so <- stackOperation
           return $ StackOperation so
 
-parseHackVM :: String -> String -> Either ParseError [HackVMCommand]
-parseHackVM = parse parserHackVM
+parseHackVM :: String -> String -> Either ParseError HackVML
+parseHackVM n s = fmap HackVML $ parse parserHackVM n s

@@ -37,7 +37,7 @@ pushM var = unlines ["@" ++ var
             push
 
 push :: String
-push = unlines ["@SP"
+push = unlines ["@SP // Push value in D register to *SP"
                ,"A=M"
                ,"M=D"
                ,"@SP"
@@ -65,24 +65,43 @@ sub = unlines ["D=M-D"]
 
 neg :: String
 neg = unlines ["D=-M"]
-                   
-class Reifiable a where
-    reify :: a -> String
 
-instance Reifiable HackVMCommand where
-    reify (StackOperation (Push Constant n)) = pushA n
-    reify (StackOperation (Push seg n)) = pushM $ show (baseAddress seg + n)
-    reify (StackOperation (Pop Temp n)) = popS $ show (baseAddress Temp + n)
-    reify (ArithmeticCommand cmd) = reifyArithmeticCommand cmd
+type CodeWriter a = RWS String () Int a
+    
+compile :: HackVML -> String -> String
+compile (HackVML vml) filename = case runRWS (compile' vml) filename 0 of
+                                   (s, _, _) -> s
+    where
+      compile' :: [HackVMCommand] -> CodeWriter String
+      compile' [] = return ""
+      compile' (StackOperation c:cs)    = go stack c cs
+      compile' (ArithmeticCommand c:cs) = go arithmetic c cs
+      go f c cs = do
+        e1 <- f c
+        e2 <- compile' cs
+        return $ e1 ++ e2
 
-reifyArithmeticCommand :: ArithmeticCommand -> String
-reifyArithmeticCommand Add = popD ++ popM ++ add ++ push
-reifyArithmeticCommand Sub = popD ++ popM ++ sub ++ push
-reifyArithmeticCommand Neg = popD ++ neg ++ push
-reifyArithmeticCommand Eq  = undefined
-reifyArithmeticCommand Gt  = undefined
-reifyArithmeticCommand Lt  = undefined
-reifyArithmeticCommand And = popD ++ popM ++ "D=D&M\n" ++ push
-reifyArithmeticCommand Or  = popD ++ popM ++ "D=D|M\n" ++ push
-reifyArithmeticCommand Not = popM ++ "D=!M\n" ++ push
+getFilename :: CodeWriter String
+getFilename = ask
 
+getVariableCout :: CodeWriter Int
+getVariableCout = do
+  c <- get
+  modify (+1)
+  return c
+               
+stack :: StackOperation -> CodeWriter String
+stack (Push Constant n) = return $ pushA n
+stack (Push seg n)      = return $ pushM $ show (baseAddress seg + n)
+-- stack (Pop Temp n)      = return $ popS $ show (baseAddress Temp + n)
+
+arithmetic :: ArithmeticCommand -> CodeWriter String
+arithmetic Add = return $ "// Add\n" ++ popD ++ popM ++ add ++ push
+arithmetic Sub = return $ "// Sub\n" ++ popD ++ popM ++ sub ++ push
+arithmetic Neg = return $ "// Neg\n" ++ popD ++ neg ++ push
+arithmetic Eq  = return $ undefined
+arithmetic Gt  = return $ undefined
+arithmetic Lt  = return $ undefined
+arithmetic And = return $ popD ++ popM ++ "D=D&M\n" ++ push
+arithmetic Or  = return $ popD ++ popM ++ "D=D|M\n" ++ push
+arithmetic Not = return $ popM ++ "D=!M\n" ++ push
