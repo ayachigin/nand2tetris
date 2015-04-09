@@ -17,6 +17,11 @@ getVariableCout = do
   c <- get
   modify (+1)
   return c
+
+getStaticVariableName :: Int -> CodeWriter String
+getStaticVariableName i = do
+  fileName <- getFilename
+  return $ fileName ++ "." ++ show i
                
 compile :: HackVML -> String -> String
 compile (HackVML vml) filename = case runRWS (compile' vml) filename 0 of
@@ -32,17 +37,38 @@ compile (HackVML vml) filename = case runRWS (compile' vml) filename 0 of
         return $ e1 ++ e2
 
 stack :: StackOperation -> CodeWriter String
-stack (Push Constant n) = return $ pushA n
-stack (Push Pointer n)  = return $ pushM $ show (baseAddress Pointer + n)
-stack (Push Temp n)     = return $ pushM $ show (baseAddress Temp + n)
-stack (Push Static n)   = getFilename >>= return . pushM . (++ "." ++ show n)
-stack (Push segment n)  = return $ unlines ["@" ++ show n
-                                           ,"D=A"
-                                           ,"@" ++ segmentToLabel segment
-                                           ,"A=D+M"
-                                           ,"D=M"
-                                           ,init pushD]
--- stack (Pop Temp n)      = return $ popS $ show (baseAddress Temp + n)
+stack (Push segment n) = push segment n
+stack (Pop  segment n) = pop  segment n
+
+push :: MemorySegment -> Int -> CodeWriter String
+push Constant n = return $ pushA n
+push Pointer  n = return $ pushM $ show (baseAddress Pointer + n)
+push Temp     n = return $ pushM $ show (baseAddress Temp + n)
+push Static   n = getStaticVariableName n >>= return . pushM 
+push segment  n = return $ unlines ["// push" ++ show segment ++ "[" ++ show n ++ "]"
+                                   ,"@" ++ show n
+                                   ,"D=A"
+                                   ,"@" ++ segmentToLabel segment
+                                   ,"A=D+M"
+                                   ,"D=M"
+                                   ,init pushD]
+
+pop :: MemorySegment -> Int -> CodeWriter String
+pop Constant _ = error $ "Unexpected segment to pop: Constant"
+pop Pointer  n = return . popS . show $ baseAddress Pointer + n
+pop Temp     n = return . popS . show $ baseAddress Temp    + n
+pop Static   n = getStaticVariableName n >>= return . popS
+pop segment  n = return $ unlines ["// pop " ++ show segment ++ "[" ++ show n ++ "]"
+                                  ,"@" ++ show n
+                                  ,"D=A"
+                                  ,"@" ++ segmentToLabel segment
+                                  ,"D=D+M"
+                                  ,"@R13 // save target address"
+                                  ,"M=D"
+                                  ,init popD
+                                  ,"@R13"
+                                  ,"A=M"
+                                  ,"M=D"]
 
 arithmetic :: ArithmeticCommand -> CodeWriter String
 arithmetic Add = return $ "// Add\n" ++ popD ++ popM ++ add ++ pushD
@@ -93,7 +119,7 @@ popD :: String
 popD = popM ++ unlines ["D=M"]
        
 popS :: String -> String
-popS symbol = popM ++ popD ++
+popS symbol = popD ++
               unlines ["@" ++ symbol
                       ,"M=D"]
 
