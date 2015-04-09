@@ -6,6 +6,12 @@ import Control.Applicative ((<$>), (<*>), (<*), (*>))
 
 import Language.Hack.VM.Types
 
+comment :: Parser ()
+comment = do
+  string "//"
+  many $ noneOf "\n"
+  char '\n'
+  return ()
     
 add :: Parser ArithmeticCommand
 add = string "add" *> return Add
@@ -102,9 +108,10 @@ stackOperation = try push <|> pop
 
 parserHackVM :: Parser [HackVMCommand]
 parserHackVM = do 
-  spaces
-  sepEndBy (a <|> s) spaces
+  skipMany spaceOrComment
+  sepEndBy (a <|> s) (skipMany spaceOrComment)
       where
+        spaceOrComment = (space >> return ()) <|> comment
         a = do
           ac <- try arithmeticCommand
           return $ ArithmeticCommand ac
